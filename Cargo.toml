@@ -1,0 +1,11 @@
+[package]
+name = "wgpu-vectors"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytemuck = "1.23.2"
+glam = { version = "0.30.5", features = ["bytemuck"] }
+pollster = "0.4"
+wgpu = "26.0"
+winit = "0.30"
