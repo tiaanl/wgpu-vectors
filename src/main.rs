@@ -1,149 +1,78 @@
-use std::sync::Arc;
+mod commands;
+mod fill;
+mod shapes;
 
 use glam::{Vec2, Vec4};
-use winit::application::ApplicationHandler;
-use winit::dpi::PhysicalSize;
-use winit::event::WindowEvent;
-use winit::event_loop::{ActiveEventLoop, EventLoop};
-use winit::window::{Window, WindowAttributes, WindowId};
+use granite::{glam, prelude::*, wgpu};
 
-#[allow(clippy::large_enum_variant)]
-enum App {
-    Suspended,
-    Resumed {
-        window: Arc<Window>,
-        device: wgpu::Device,
-        queue: wgpu::Queue,
-        surface: wgpu::Surface<'static>,
-        surface_config: wgpu::SurfaceConfiguration,
+use crate::{
+    commands::CommandList,
+    fill::Fill,
+    shapes::{Ellipse, Rectangle},
+};
 
-        screen_pipeline: ScreenPipeline,
-    },
-}
+struct ExampleBuilder;
 
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window = Arc::new(
-            event_loop
-                .create_window(WindowAttributes::default())
-                .unwrap(),
-        );
+impl SceneBuilder for ExampleBuilder {
+    type Target = Example;
 
-        let instance = wgpu::Instance::default();
-
-        let PhysicalSize { width, height } = window.inner_size();
-
-        let adapter =
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-                .unwrap();
-
-        let surface = instance.create_surface(Arc::clone(&window)).unwrap();
-        let surface_config = surface.get_default_config(&adapter, width, height).unwrap();
-
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
-
-        surface.configure(&device, &surface_config);
-
-        let screen_pipeline = ScreenPipeline::new(&device, surface_config.format);
-
-        *self = Self::Resumed {
-            window,
-            surface,
-            surface_config,
-            device,
-            queue,
-
-            screen_pipeline,
+    fn build(&self, renderer: &RenderContext, surface_config: &SurfaceConfig) -> Self::Target {
+        Example {
+            screen_pipeline: ScreenPipeline::new(&renderer.device, surface_config.format),
         }
     }
+}
 
-    fn window_event(
+struct Example {
+    screen_pipeline: ScreenPipeline,
+}
+
+impl Scene for Example {
+    fn render(
         &mut self,
-        event_loop: &ActiveEventLoop,
-        window_id: WindowId,
-        event: WindowEvent,
-    ) {
-        let Self::Resumed {
-            window,
-            surface,
-            device,
-            queue,
-            surface_config,
-            screen_pipeline,
-            ..
-        } = self
-        else {
-            return;
-        };
+        renderer: &RenderContext,
+        surface: &Surface,
+    ) -> impl Iterator<Item = wgpu::CommandBuffer> {
+        let mut encoder = renderer
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-        if window_id != window.id() {
-            return;
-        }
+        let mut commands = CommandList::default();
 
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::RedrawRequested => {
-                let PhysicalSize { width, height } = window.inner_size();
+        commands.draw(
+            Rectangle::new(Vec2::new(105.0, 105.0), Vec2::new(40.0, 40.0)).with_corner_radius(10.0),
+            Fill::solid(0.0, 0.0, 0.0, 0.5).with_feather(10.0),
+        );
 
-                if width != surface_config.width || height != surface_config.height {
-                    println!("Resizing to {width}x{height}");
-                    surface_config.width = width;
-                    surface_config.height = height;
-                    surface.configure(device, surface_config);
-                }
+        commands.draw(
+            Rectangle::new(Vec2::new(100.0, 100.0), Vec2::new(40.0, 40.0)).with_corner_radius(10.0),
+            Fill::solid(1.0, 0.5, 1.0, 1.0),
+        );
 
-                let surface_texture = surface.get_current_texture().unwrap();
-                let surface_view = surface_texture
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
+        commands.draw(
+            Ellipse::new(Vec2::new(200.0, 200.0), Vec2::new(52.0, 52.0)),
+            Fill::solid(0.0, 0.0, 0.0, 0.5).with_feather(10.0),
+        );
 
-                let mut encoder =
-                    device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        commands.draw(
+            Ellipse::new(Vec2::new(200.0, 200.0), Vec2::new(50.0, 50.0)),
+            Fill::solid(1.0, 0.0, 0.5, 1.0),
+        );
 
-                let mut shapes = Shapes::default();
+        self.screen_pipeline.render(
+            &renderer.device,
+            &renderer.queue,
+            &mut encoder,
+            &surface.view,
+            &commands,
+        );
 
-                shapes.rectangle(
-                    Vec4::new(0.5, 0.0, 0.0, 1.0),
-                    Vec2::new(400.0, 300.0),
-                    Vec2::new(100.0, 10.0),
-                    10.0,
-                    0.0,
-                    0.0,
-                );
-
-                shapes.ring(
-                    Vec4::new(0.0, 0.0, 0.0, 1.0),
-                    Vec2::new(405.0, 305.0),
-                    10.0,
-                    20.0,
-                    30.0,
-                );
-
-                shapes.ring(
-                    Vec4::new(1.0, 0.0, 0.0, 1.0),
-                    Vec2::new(400.0, 300.0),
-                    10.0,
-                    20.0,
-                    1.0,
-                );
-
-                screen_pipeline.render(device, queue, &mut encoder, &surface_view, &shapes);
-
-                queue.submit(std::iter::once(encoder.finish()));
-
-                surface_texture.present();
-
-                window.request_redraw();
-            }
-            _ => {}
-        }
+        std::iter::once(encoder.finish())
     }
 }
 
 fn main() {
-    let event_loop = EventLoop::new().unwrap();
-    event_loop.run_app(&mut App::Suspended).unwrap();
+    granite::run(ExampleBuilder).unwrap();
 }
 
 struct ScreenPipeline {
@@ -185,7 +114,7 @@ impl ScreenPipeline {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("screen_pipeline_layout"),
             bind_group_layouts: &[&shapes_bind_group_layout],
-            push_constant_ranges: &[],
+            ..Default::default()
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -210,7 +139,7 @@ impl ScreenPipeline {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -230,7 +159,7 @@ impl ScreenPipeline {
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
-        shapes: &Shapes,
+        commands: &CommandList,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("screen_render_pass"),
@@ -246,10 +175,11 @@ impl ScreenPipeline {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         // Make sure the buffer is big enough.
-        if self.buffer_size < shapes.data.len() as u32 {
+        if self.buffer_size < commands.data.len() as u32 {
             let (buffer, bind_group) = Self::create_shapes_buffer(
                 device,
                 &self.shapes_bind_group_layout,
@@ -261,7 +191,7 @@ impl ScreenPipeline {
         }
 
         // Upload the data to the buffer.
-        queue.write_buffer(&self.shapes_buffer, 0, bytemuck::cast_slice(&shapes.data));
+        queue.write_buffer(&self.shapes_buffer, 0, bytemuck::cast_slice(&commands.data));
 
         // Setup the draw.
         render_pass.set_pipeline(&self.pipeline);
@@ -293,83 +223,5 @@ impl ScreenPipeline {
         });
 
         (buffer, bind_group)
-    }
-}
-
-#[derive(Default)]
-struct Shapes {
-    data: Vec<f32>,
-}
-
-impl Shapes {
-    const END_ID: u32 = 0;
-    const CIRCLE_ID: u32 = 1;
-    const RING_ID: u32 = 2;
-    const RECTANGLE_ID: u32 = 3;
-
-    fn circle(&mut self, color: Vec4, center: Vec2, radius: f32, feather: f32) {
-        self.command(
-            Self::CIRCLE_ID,
-            &[
-                color.x, color.y, color.z, color.w, center.x, center.y, radius, feather,
-            ],
-        );
-    }
-
-    fn ring(
-        &mut self,
-        color: Vec4,
-        center: Vec2,
-        radius_inner: f32,
-        radius_outer: f32,
-        feather: f32,
-    ) {
-        self.command(
-            Self::RING_ID,
-            &[
-                color.x,
-                color.y,
-                color.z,
-                color.w,
-                center.x,
-                center.y,
-                radius_inner,
-                radius_outer,
-                feather,
-            ],
-        );
-    }
-
-    fn rectangle(
-        &mut self,
-        color: Vec4,
-        center: Vec2,
-        half_size: Vec2,
-        radius: f32,
-        angle: f32,
-        feather: f32,
-    ) {
-        self.command(
-            Self::RECTANGLE_ID,
-            &[
-                color.x,
-                color.y,
-                color.z,
-                color.w,
-                center.x,
-                center.y,
-                half_size.x,
-                half_size.y,
-                radius,
-                angle,
-                feather,
-            ],
-        );
-    }
-
-    fn command(&mut self, command: u32, data: &[f32]) {
-        self.data.reserve(data.len() + 2);
-        self.data.push(f32::from_bits(command));
-        self.data.extend_from_slice(data);
     }
 }

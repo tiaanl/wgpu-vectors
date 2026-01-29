@@ -15,12 +15,12 @@ fn sdf_coverage(sd: f32, feather: f32) -> f32 {
     return 1.0 - smoothstep(-half, half, sd);
 }
 
-fn sdf_circle(
+fn sdf_ellipse(
     frag_pos: vec2<f32>,
     center: vec2<f32>,
-    radius: f32,
+    radius: vec2<f32>,
 ) -> f32 {
-    return length(frag_pos - center) - radius;
+    return length(frag_pos - center) - radius.x;
 }
 
 fn sdf_ring(
@@ -70,7 +70,7 @@ fn sdf_rectangle(
     center: vec2<f32>,
     half: vec2<f32>,
     radius: f32,  // Percentage of the shorter side.
-    angle: f32,  // In degrees
+    angle: f32,
 ) -> f32 {
     // Rotate into local rect space.
     let local = rotate(frag_pos - center, -angle);
@@ -88,23 +88,26 @@ var<private> shape_index: u32;
 var<private> acc_rgb: vec3<f32>;  // Accumulator RGB.
 var<private> acc_a: f32;          // Accumulator alpha.
 
-fn command_circle(frag_pos: vec2<f32>) {
-    let color = vec4<f32>(
+fn command_ellipse(frag_pos: vec2<f32>) {
+    let center = vec2<f32>(
         shapes.data[shape_index + 0],
         shapes.data[shape_index + 1],
+    );
+    let radius = vec2<f32>(
         shapes.data[shape_index + 2],
         shapes.data[shape_index + 3],
     );
-    let center = vec2<f32>(
+    let color = vec4<f32>(
         shapes.data[shape_index + 4],
         shapes.data[shape_index + 5],
+        shapes.data[shape_index + 6],
+        shapes.data[shape_index + 7],
     );
-    let radius = shapes.data[shape_index + 6];
-    let feather = shapes.data[shape_index + 7];
+    let feather = shapes.data[shape_index + 8];
 
-    shape_index += 8;
+    shape_index += 9;
 
-    let sd = sdf_circle(frag_pos, center, radius);
+    let sd = sdf_ellipse(frag_pos, center, radius);
     let coverage = sdf_coverage(sd, feather);
     let a = clamp(color.a * coverage, 0.0, 1.0);
     let pre = color.rgb * a;
@@ -140,31 +143,32 @@ fn command_ring(frag_pos: vec2<f32>) {
 }
 
 fn command_rectangle(frag_pos: vec2<f32>) {
-    let color = vec4<f32>(
+    let center = vec2<f32>(
         shapes.data[shape_index + 0],
         shapes.data[shape_index + 1],
+    );
+    let extent = vec2<f32>(
         shapes.data[shape_index + 2],
         shapes.data[shape_index + 3],
     );
-    let center = vec2<f32>(
-        shapes.data[shape_index + 4],
+    let corner_radius = shapes.data[shape_index + 4];
+    let color = vec4<f32>(
         shapes.data[shape_index + 5],
-    );
-    let half_size = vec2<f32>(
         shapes.data[shape_index + 6],
         shapes.data[shape_index + 7],
+        shapes.data[shape_index + 8],
     );
-    let radius = shapes.data[shape_index + 8];
-    let angle = shapes.data[shape_index + 9];
-    let feather = shapes.data[shape_index + 10];
+    let feather = shapes.data[shape_index + 9];
 
-    shape_index += 11;
+    let angle = 0.0;
+
+    shape_index += 10;
 
     let sd = sdf_rectangle(
         frag_pos,
         center,
-        half_size,
-        radius,
+        extent,
+        corner_radius,
         radians(angle),
     );
     let coverage = sdf_coverage(sd, feather);
@@ -189,23 +193,21 @@ fn fragment(@builtin(position) frag_pos4: vec4<f32>) -> @location(0) vec4<f32> {
         shape_index += 1;
 
         if id == 0 {
-            break;
+             break;
         }
 
         switch id {
             case 1: {
-                command_circle(frag_pos);
-            }
-
-            case 2: {
-                command_ring(frag_pos);
-            }
-
-            case 3: {
                 command_rectangle(frag_pos);
             }
 
-            default: {}
+            case 2: {
+                command_ellipse(frag_pos);
+            }
+
+            default: {
+                break;
+            }
         }
     }
 
