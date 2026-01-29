@@ -88,6 +88,46 @@ var<private> shape_index: u32;
 var<private> acc_rgb: vec3<f32>;  // Accumulator RGB.
 var<private> acc_a: f32;          // Accumulator alpha.
 
+struct Fill {
+    color: vec4<f32>,
+    feather: f32,
+}
+
+fn read_fill() -> Fill {
+    let color = vec4<f32>(
+        shapes.data[shape_index + 0],
+        shapes.data[shape_index + 1],
+        shapes.data[shape_index + 2],
+        shapes.data[shape_index + 3],
+    );
+    let feather = shapes.data[shape_index + 4];
+
+    shape_index += 5;
+
+    return Fill(color, feather);
+}
+
+struct Stroke {
+    color: vec4<f32>,
+    thickness: f32,
+    feather: f32,
+}
+
+fn read_stroke() -> Stroke {
+    let color = vec4<f32>(
+        shapes.data[shape_index + 0],
+        shapes.data[shape_index + 1],
+        shapes.data[shape_index + 2],
+        shapes.data[shape_index + 3],
+    );
+    let thickness = shapes.data[shape_index + 4];
+    let feather = shapes.data[shape_index + 5];
+
+    shape_index += 6;
+
+    return Stroke(color, thickness, feather);
+}
+
 fn command_ellipse(frag_pos: vec2<f32>) {
     let center = vec2<f32>(
         shapes.data[shape_index + 0],
@@ -97,20 +137,15 @@ fn command_ellipse(frag_pos: vec2<f32>) {
         shapes.data[shape_index + 2],
         shapes.data[shape_index + 3],
     );
-    let color = vec4<f32>(
-        shapes.data[shape_index + 4],
-        shapes.data[shape_index + 5],
-        shapes.data[shape_index + 6],
-        shapes.data[shape_index + 7],
-    );
-    let feather = shapes.data[shape_index + 8];
+    shape_index += 4;
 
-    shape_index += 9;
+    let fill = read_fill();
+    let stroke = read_stroke();
 
     let sd = sdf_ellipse(frag_pos, center, radius);
-    let coverage = sdf_coverage(sd, feather);
-    let a = clamp(color.a * coverage, 0.0, 1.0);
-    let pre = color.rgb * a;
+    let coverage = sdf_coverage(sd, fill.feather);
+    let a = clamp(fill.color.a * coverage, 0.0, 1.0);
+    let pre = fill.color.rgb * a;
 
     acc_rgb = pre + acc_rgb * (1.0 - a);
     acc_a = a + acc_a * (1.0 - a);
@@ -152,17 +187,13 @@ fn command_rectangle(frag_pos: vec2<f32>) {
         shapes.data[shape_index + 3],
     );
     let corner_radius = shapes.data[shape_index + 4];
-    let color = vec4<f32>(
-        shapes.data[shape_index + 5],
-        shapes.data[shape_index + 6],
-        shapes.data[shape_index + 7],
-        shapes.data[shape_index + 8],
-    );
-    let feather = shapes.data[shape_index + 9];
+
+    shape_index += 5;
+
+    let fill = read_fill();
+    let stroke = read_stroke();
 
     let angle = 0.0;
-
-    shape_index += 10;
 
     let sd = sdf_rectangle(
         frag_pos,
@@ -171,9 +202,9 @@ fn command_rectangle(frag_pos: vec2<f32>) {
         corner_radius,
         radians(angle),
     );
-    let coverage = sdf_coverage(sd, feather);
-    let a = clamp(color.a * coverage, 0.0, 1.0);
-    let pre = color.rgb * a;
+    let coverage = sdf_coverage(sd, fill.feather);
+    let a = clamp(fill.color.a * coverage, 0.0, 1.0);
+    let pre = fill.color.rgb * a;
 
     acc_rgb = pre + acc_rgb * (1.0 - a);
     acc_a = a + acc_a * (1.0 - a);

@@ -13,11 +13,9 @@ impl Fill {
         }
     }
 
+    #[inline]
     pub fn solid(r: f32, g: f32, b: f32, alpha: f32) -> Self {
-        Self {
-            color: Vec4::new(r, g, b, alpha),
-            feather: 1.0,
-        }
+        Self::new(Vec4::new(r, g, b, alpha))
     }
 
     pub fn with_feather(self, feather: f32) -> Self {
