@@ -89,7 +89,7 @@ impl Renderer {
         commands: &CommandList,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("screen_render_pass"),
+            label: Some("shapes"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: surface_view,
                 depth_slice: None,
@@ -131,8 +131,6 @@ impl Renderer {
         bind_group_layout: &wgpu::BindGroupLayout,
         size: u32,
     ) -> (wgpu::Buffer, wgpu::BindGroup) {
-        println!("Creating shapes buffer with size: {size}");
-
         let buffer = device.create_buffer(&wgpu::wgt::BufferDescriptor {
             label: Some("shapes"),
             size: size as wgpu::BufferAddress * std::mem::size_of::<f32>() as wgpu::BufferAddress,
