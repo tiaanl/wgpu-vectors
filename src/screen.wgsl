@@ -1,3 +1,7 @@
+struct Globals {
+    view_size: vec2<f32>,
+}
+
 struct Draw {
     min: vec2<f32>,
     max: vec2<f32>,
@@ -13,16 +17,32 @@ struct OpCodes {
 }
 
 @group(0) @binding(0)
-var<storage, read> draws: Draws;
+var<uniform> globals: Globals;
 
 @group(0) @binding(1)
+var<storage, read> draws: Draws;
+
+@group(0) @binding(2)
 var<storage, read> op_codes: OpCodes;
 
 @vertex
-fn vertex(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
-    let uv = vec2<f32>(f32(vertex_index >> 1u), f32(vertex_index & 1u)) * 2.0;
-    let clip_position = vec4<f32>(uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
-    return clip_position;
+fn vertex(
+    @builtin(instance_index) instance_index: u32,
+    @builtin(vertex_index) vertex_index: u32,
+) -> @builtin(position) vec4<f32> {
+    let blocks_x: u32 = u32(globals.view_size.x) / 16u;
+
+    let block_x = instance_index % blocks_x;
+    let block_y = instance_index / blocks_x;
+    
+    let pixel_x = block_x * 16u + (vertex_index % 16u);
+    let pixel_y = block_y * 16u + (vertex_index / 16u);
+
+    let pixel = vec2<f32>(f32(pixel_x), f32(pixel_y));
+
+    let ndc = (pixel + vec2<f32>(0.5, 0.5)) / globals.view_size * 2.0 - vec2<f32>(1.0, 1.0);
+
+    return vec4<f32>(ndc, 0.0, 1.0);
 }
 
 fn sdf_coverage(sd: f32, feather: f32) -> f32 {

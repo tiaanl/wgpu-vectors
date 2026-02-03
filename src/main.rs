@@ -59,7 +59,11 @@ impl Scene for Example {
             &renderer.device,
             &renderer.queue,
             &mut encoder,
-            &surface.view,
+            View {
+                view: &surface.view,
+                width: surface.config.width,
+                height: surface.config.height,
+            },
             &mut commands,
         );
 
