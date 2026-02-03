@@ -60,7 +60,7 @@ impl Scene for Example {
             &renderer.queue,
             &mut encoder,
             &surface.view,
-            &commands,
+            &mut commands,
         );
 
         std::iter::once(encoder.finish())

@@ -1,7 +1,22 @@
-struct Shapes {
-    data: array<f32>,
+struct Draw {
+    min: vec2<f32>,
+    max: vec2<f32>,
+    op_code_index: u32,
 }
-@group(0) @binding(0) var<storage, read> shapes: Shapes;
+
+struct Draws {
+    draws: array<Draw>,
+}
+
+struct OpCodes {
+    op_codes: array<f32>,
+}
+
+@group(0) @binding(0)
+var<storage, read> draws: Draws;
+
+@group(0) @binding(1)
+var<storage, read> op_codes: OpCodes;
 
 @vertex
 fn vertex(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
@@ -84,7 +99,7 @@ fn sdf_rectangle(
     return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - r;
 }
 
-var<private> shape_index: u32;
+var<private> op_code_index: u32;
 var<private> acc_rgb: vec3<f32>;  // Accumulator RGB.
 var<private> acc_a: f32;          // Accumulator alpha.
 
@@ -95,14 +110,14 @@ struct Fill {
 
 fn read_fill() -> Fill {
     let color = vec4<f32>(
-        shapes.data[shape_index + 0],
-        shapes.data[shape_index + 1],
-        shapes.data[shape_index + 2],
-        shapes.data[shape_index + 3],
+        op_codes.op_codes[op_code_index + 0],
+        op_codes.op_codes[op_code_index + 1],
+        op_codes.op_codes[op_code_index + 2],
+        op_codes.op_codes[op_code_index + 3],
     );
-    let feather = shapes.data[shape_index + 4];
+    let feather = op_codes.op_codes[op_code_index + 4];
 
-    shape_index += 5;
+    op_code_index += 5;
 
     return Fill(color, feather);
 }
@@ -115,29 +130,29 @@ struct Stroke {
 
 fn read_stroke() -> Stroke {
     let color = vec4<f32>(
-        shapes.data[shape_index + 0],
-        shapes.data[shape_index + 1],
-        shapes.data[shape_index + 2],
-        shapes.data[shape_index + 3],
+        op_codes.op_codes[op_code_index + 0],
+        op_codes.op_codes[op_code_index + 1],
+        op_codes.op_codes[op_code_index + 2],
+        op_codes.op_codes[op_code_index + 3],
     );
-    let thickness = shapes.data[shape_index + 4];
-    let feather = shapes.data[shape_index + 5];
+    let thickness = op_codes.op_codes[op_code_index + 4];
+    let feather = op_codes.op_codes[op_code_index + 5];
 
-    shape_index += 6;
+    op_code_index += 6;
 
     return Stroke(color, thickness, feather);
 }
 
 fn command_ellipse(frag_pos: vec2<f32>) {
     let center = vec2<f32>(
-        shapes.data[shape_index + 0],
-        shapes.data[shape_index + 1],
+        op_codes.op_codes[op_code_index + 0],
+        op_codes.op_codes[op_code_index + 1],
     );
     let radius = vec2<f32>(
-        shapes.data[shape_index + 2],
-        shapes.data[shape_index + 3],
+        op_codes.op_codes[op_code_index + 2],
+        op_codes.op_codes[op_code_index + 3],
     );
-    shape_index += 4;
+    op_code_index += 4;
 
     let fill = read_fill();
     let stroke = read_stroke();
@@ -153,20 +168,20 @@ fn command_ellipse(frag_pos: vec2<f32>) {
 
 fn command_ring(frag_pos: vec2<f32>) {
     let color = vec4<f32>(
-        shapes.data[shape_index + 0],
-        shapes.data[shape_index + 1],
-        shapes.data[shape_index + 2],
-        shapes.data[shape_index + 3],
+        op_codes.op_codes[op_code_index + 0],
+        op_codes.op_codes[op_code_index + 1],
+        op_codes.op_codes[op_code_index + 2],
+        op_codes.op_codes[op_code_index + 3],
     );
     let center = vec2<f32>(
-        shapes.data[shape_index + 4],
-        shapes.data[shape_index + 5],
+        op_codes.op_codes[op_code_index + 4],
+        op_codes.op_codes[op_code_index + 5],
     );
-    let radius_inner = shapes.data[shape_index + 6];
-    let radius_outer = shapes.data[shape_index + 7];
-    let feather = shapes.data[shape_index + 8];
+    let radius_inner = op_codes.op_codes[op_code_index + 6];
+    let radius_outer = op_codes.op_codes[op_code_index + 7];
+    let feather = op_codes.op_codes[op_code_index + 8];
 
-    shape_index += 9;
+    op_code_index += 9;
 
     let sd = sdf_ring(frag_pos, center, radius_inner, radius_outer);
     let coverage = sdf_coverage(sd, feather);
@@ -179,16 +194,16 @@ fn command_ring(frag_pos: vec2<f32>) {
 
 fn command_rectangle(frag_pos: vec2<f32>) {
     let center = vec2<f32>(
-        shapes.data[shape_index + 0],
-        shapes.data[shape_index + 1],
+        op_codes.op_codes[op_code_index + 0],
+        op_codes.op_codes[op_code_index + 1],
     );
     let extent = vec2<f32>(
-        shapes.data[shape_index + 2],
-        shapes.data[shape_index + 3],
+        op_codes.op_codes[op_code_index + 2],
+        op_codes.op_codes[op_code_index + 3],
     );
-    let corner_radius = shapes.data[shape_index + 4];
+    let corner_radius = op_codes.op_codes[op_code_index + 4];
 
-    shape_index += 5;
+    op_code_index += 5;
 
     let fill = read_fill();
     let stroke = read_stroke();
@@ -213,15 +228,15 @@ fn command_rectangle(frag_pos: vec2<f32>) {
 @fragment
 fn fragment(@builtin(position) frag_pos4: vec4<f32>) -> @location(0) vec4<f32> {
     // Reset the state.
-    shape_index = 0;
+    op_code_index = 0;
     acc_rgb = vec3<f32>(0.0, 0.0, 0.0);
     acc_a = 0.0;
 
     let frag_pos = frag_pos4.xy;
 
     loop {
-        let id = bitcast<u32>(shapes.data[shape_index]);
-        shape_index += 1;
+        let id = bitcast<u32>(op_codes.op_codes[op_code_index]);
+        op_code_index += 1;
 
         if id == 0 {
              break;

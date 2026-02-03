@@ -1,6 +1,9 @@
-use granite::glam::Vec2;
+use glam::Vec2;
 
-use crate::commands::CommandEncoder;
+use crate::{
+    commands::{CommandEncoder, IsBoundingBox},
+    math::BoundingBox,
+};
 
 pub struct Rectangle {
     center: Vec2,
@@ -25,7 +28,7 @@ impl Rectangle {
     }
 }
 
-impl crate::commands::CommandEncoder for Rectangle {
+impl CommandEncoder for Rectangle {
     const ID: u32 = 1;
 
     fn encode(&self, out: &mut Vec<f32>) {
@@ -36,6 +39,12 @@ impl crate::commands::CommandEncoder for Rectangle {
             self.extent.y,
             self.corner_radius,
         ]);
+    }
+}
+
+impl IsBoundingBox for Rectangle {
+    fn bounding_box(&self) -> BoundingBox {
+        BoundingBox::new(self.center - self.extent, self.center + self.extent)
     }
 }
 
@@ -55,5 +64,11 @@ impl CommandEncoder for Ellipse {
 
     fn encode(&self, out: &mut Vec<f32>) {
         out.extend_from_slice(&[self.center.x, self.center.y, self.radius.x, self.radius.y]);
+    }
+}
+
+impl IsBoundingBox for Ellipse {
+    fn bounding_box(&self) -> BoundingBox {
+        BoundingBox::new(self.center - self.radius, self.center + self.radius)
     }
 }

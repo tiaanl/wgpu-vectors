@@ -1,4 +1,4 @@
-use granite::glam::Vec4;
+use glam::Vec4;
 
 pub struct Fill {
     pub color: Vec4,

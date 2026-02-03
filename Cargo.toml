@@ -6,5 +6,6 @@ edition = "2024"
 [dependencies]
 bytemuck = "1.23.2"
 wgpu = "27.0"
+glam = "0.30"
 
 granite = { version = "0.1.0", path = "../granite/crates/granite" }
